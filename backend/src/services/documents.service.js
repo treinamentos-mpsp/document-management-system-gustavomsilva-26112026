@@ -46,4 +46,11 @@ function getDocumentFile(id) {
   };
 }
 
-module.exports = { uploadDocument, listDocuments, getDocumentFile };
+module.exports = {
+  uploadDocument,
+  listDocuments,
+  getDocumentFile,
+  reserveUpload: fileStorage.reserveUpload,
+  registerActiveFile: fileStorage.registerActiveFile,
+  releaseUpload: fileStorage.releaseUpload,
+};

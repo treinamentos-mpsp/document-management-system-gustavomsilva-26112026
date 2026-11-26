@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { uploadDocument } from '../services/documentApi.js';
 
-export default function UploadComponent({ owner, onUploaded }) {
+export default function UploadComponent({ owner, onUploaded, onSendingChange }) {
   const [file, setFile] = useState(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -17,6 +17,7 @@ export default function UploadComponent({ owner, onUploaded }) {
     }
 
     setSending(true);
+    onSendingChange(true);
     setError('');
     setSuccess('');
 
@@ -30,6 +31,7 @@ export default function UploadComponent({ owner, onUploaded }) {
       setError(err.message);
     } finally {
       setSending(false);
+      onSendingChange(false);
     }
   }
 
@@ -39,6 +41,7 @@ export default function UploadComponent({ owner, onUploaded }) {
       <input
         id="document-file"
         type="file"
+        disabled={sending}
         onChange={(event) => setFile(event.target.files[0] || null)}
       />
       <button type="submit" disabled={sending || !owner}>

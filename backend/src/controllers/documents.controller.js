@@ -1,15 +1,18 @@
 const documentsService = require('../services/documents.service');
 const { AppError } = require('../errors');
 
+function validateOwner(req, res, next) {
+  if (!req.get('X-User-Id')?.trim()) {
+    throw new AppError(400, 'O cabeçalho X-User-Id é obrigatório.');
+  }
+  next();
+}
+
 async function upload(req, res) {
   const owner = req.get('X-User-Id');
 
   if (!req.file) {
     throw new AppError(400, 'Nenhum arquivo foi enviado no campo "file".');
-  }
-
-  if (!owner) {
-    throw new AppError(400, 'O cabeçalho X-User-Id é obrigatório.');
   }
 
   const document = await documentsService.uploadDocument({ file: req.file, owner });
@@ -23,9 +26,10 @@ function list(req, res) {
 
 async function download(req, res) {
   const { document, filePath } = documentsService.getDocumentFile(req.params.id);
+  res.set('Cache-Control', 'private, no-store');
   res.attachment(document.originalName);
   res.type(document.mimeType);
   await res.sendFile(filePath);
 }
 
-module.exports = { upload, list, download };
+module.exports = { validateOwner, upload, list, download };

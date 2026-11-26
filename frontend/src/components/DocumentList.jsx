@@ -22,10 +22,10 @@ export default function DocumentList({ documents }) {
       <tbody>
         {documents.map((document) => (
           <tr key={document.id}>
-            <td>{document.originalName}</td>
-            <td>{formatSize(document.size)}</td>
-            <td>{new Date(document.uploadedAt).toLocaleString('pt-BR')}</td>
-            <td><DownloadButton document={document} /></td>
+            <td data-label="Nome">{document.originalName}</td>
+            <td data-label="Tamanho">{formatSize(document.size)}</td>
+            <td data-label="Enviado em">{new Date(document.uploadedAt).toLocaleString('pt-BR')}</td>
+            <td data-label="Ação"><DownloadButton document={document} /></td>
           </tr>
         ))}
       </tbody>

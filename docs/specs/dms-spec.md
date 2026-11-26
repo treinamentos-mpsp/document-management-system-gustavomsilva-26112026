@@ -70,6 +70,8 @@ Entregar um sistema web que permite a usuários enviar, listar e baixar document
 | PORT               | 3000              | Porta do servidor Express             |
 | STORAGE_DIR        | `backend/storage` | Pasta de gravação dos arquivos        |
 | MAX_UPLOAD_SIZE_MB | 10                | Tamanho máximo de upload em megabytes |
+| MAX_STORAGE_SIZE_MB | 100              | Limite total do armazenamento local em megabytes |
+| UPLOAD_TIMEOUT_MS | 120000              | Duração máxima do upload em milissegundos |
 
 ## 6. Contratos de API
 
@@ -79,7 +81,7 @@ Identificação do usuário nesta fase: header `X-User-Id` (sem autenticação).
 
 ### POST /upload
 
-- Entrada: `multipart/form-data` com campo `file` e header `X-User-Id`
+- Entrada: `multipart/form-data` com um único campo `file` e header `X-User-Id`; campos adicionais são rejeitados.
 - Sucesso: `201 Created`, corpo com metadados do documento (sem `storedName`)
 
 ```json
@@ -94,8 +96,9 @@ Identificação do usuário nesta fase: header `X-User-Id` (sem autenticação).
 ```
 
 - Erros:
-  - `400` - campo `file` ausente ou header `X-User-Id` ausente
+   - `400` - campo `file` ausente, campo adicional ou header `X-User-Id` ausente
   - `413` - arquivo acima de `MAX_UPLOAD_SIZE_MB`
+   - `507` - espaço disponível na cota de armazenamento insuficiente
   - `500` - falha inesperada
 
 ### GET /documents
@@ -105,7 +108,7 @@ Identificação do usuário nesta fase: header `X-User-Id` (sem autenticação).
 
 ### GET /documents/:id/download
 
-- Sucesso: `200 OK`, corpo binário com `Content-Type` (mimeType) e `Content-Disposition: attachment; filename="<originalName>"`
+- Sucesso: `200 OK`, corpo binário com `Content-Type` (mimeType), `Content-Disposition: attachment; filename="<originalName>"` e `Cache-Control: private, no-store`.
 - Erros:
   - `404` - documento inexistente ou arquivo físico ausente
   - `500` - falha inesperada
@@ -125,6 +128,8 @@ Identificação do usuário nesta fase: header `X-User-Id` (sem autenticação).
   - `repositories/` cuida de persistência (metadados em memória e arquivos em disco)
 - Fluxo de dependência: `routes -> controllers -> services -> repositories`.
 - `multer` com `diskStorage` grava em `STORAGE_DIR`; o limite de tamanho vem de `MAX_UPLOAD_SIZE_MB`.
+- A cota `MAX_STORAGE_SIZE_MB` considera arquivos existentes e reservas dos uploads em andamento. A coordenação das reservas é por processo; use uma única instância por diretório de armazenamento.
+- Uploads incompletos são encerrados após `UPLOAD_TIMEOUT_MS`, liberando sua reserva e removendo arquivos parciais.
 - Repositório de metadados é um `Map` em memória, encapsulado para permitir troca futura por banco.
 - Frontend em React com Hooks, organizado em `components/`, `pages/` e `services/`. Chamadas via `fetch` ao prefixo `/api`.
 
@@ -136,7 +141,7 @@ Identificação do usuário nesta fase: header `X-User-Id` (sem autenticação).
 | Perda de metadados ao reiniciar o processo                  | Documentado; persistência em banco será etapa futura                |
 | Arquivos órfãos em disco se o metadado falhar após gravação | Remover o arquivo no service em caso de erro                        |
 | Upload de tipos perigosos                                   | Arquivos são enviados com `Content-Disposition: attachment`         |
-| Crescimento do `storage` sem limite                         | Limite por arquivo; limpeza fica fora do escopo                     |
+| Crescimento do `storage` sem limite                         | Cota total configurável; reservas coordenadas em uma única instância |
 
 ## 9. Plano de execução
 
@@ -147,23 +152,23 @@ Cada etapa só começa após a anterior ser aceita.
    - Critério de aceite: servidor sobe na `PORT` configurada; `STORAGE_DIR` é criado se não existir
 
 2. **Repositórios de metadados e de arquivos**
-   - Arquivos: `backend/src/repositories/documentRepository.js`, `backend/src/repositories/fileStorage.js`
+   - Arquivos: `backend/src/repositories/documents.repository.js`, `backend/src/repositories/fileStorage.js`
    - Critério de aceite: inserção, listagem por dono e busca por id cobertas pelos testes de endpoint
 
 3. **Serviço de documentos**
-   - Arquivos: `backend/src/services/documentService.js`, `backend/src/errors.js`
+   - Arquivos: `backend/src/services/documents.service.js`, `backend/src/errors.js`
    - Critério de aceite: regras de existência e ownership aplicadas; arquivo órfão removido em falha
 
 4. **Upload (multer + diskStorage)**
-   - Arquivos: `backend/src/controllers/documentController.js`, `backend/src/routes/documentRoutes.js`
+   - Arquivos: `backend/src/controllers/documents.controller.js`, `backend/src/routes/documents.routes.js`
    - Critério de aceite: `POST /upload` retorna `201` com metadados; `400` e `413` conforme contrato
 
 5. **Listagem**
-   - Arquivos: `backend/src/controllers/documentController.js`, `backend/src/routes/documentRoutes.js`
+   - Arquivos: `backend/src/controllers/documents.controller.js`, `backend/src/routes/documents.routes.js`
    - Critério de aceite: `GET /documents` retorna lista e aceita filtro `owner`
 
 6. **Download**
-   - Arquivos: `backend/src/controllers/documentController.js`, `backend/src/routes/documentRoutes.js`
+   - Arquivos: `backend/src/controllers/documents.controller.js`, `backend/src/routes/documents.routes.js`
    - Critério de aceite: `GET /documents/:id/download` retorna o binário com headers corretos; `404` para id inexistente
 
 7. **Tratamento de erros e testes de backend**
